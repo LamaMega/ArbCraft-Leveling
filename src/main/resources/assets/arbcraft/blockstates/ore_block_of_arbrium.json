@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "arbcraft:block/ore_block_of_arbrium"
+    }
+  }
+}

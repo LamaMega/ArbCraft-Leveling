@@ -1,0 +1,616 @@
+package net.attarax.arbcraft;
+
+import net.attarax.arbcraft.AttributeModifiers.*;
+//import net.attarax.arbcraft.MobScaling.MobScalingConfig;
+//import net.attarax.arbcraft.MobScaling.MobScalingEventHandler;
+import net.attarax.arbcraft.commands.ModCommands;
+import net.attarax.arbcraft.gui.ModMenuTypes;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.behavior.Swim;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerXpEvent;
+import org.slf4j.Logger;
+
+import com.mojang.logging.LogUtils;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.material.MapColor;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
+import net.neoforged.neoforge.event.server.ServerStartingEvent;
+import net.neoforged.neoforge.registries.DeferredBlock;
+import net.neoforged.neoforge.registries.DeferredItem;
+import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.event.level.BlockEvent;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+
+// The value here should match an entry in the META-INF/neoforge.mods.toml file
+@Mod(ArbCraft.MODID)
+public class ArbCraft {
+    // Define mod id in a common place for everything to reference
+    public static final String MODID = "arbcraft";
+    // Directly reference a slf4j logger
+    private static final Logger LOGGER = LogUtils.getLogger();
+    // Create a Deferred Register to hold Blocks which will all be registered under the "arbcraft" namespace
+    public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(MODID);
+    // Create a Deferred Register to hold Items which will all be registered under the "arbcraft" namespace
+    public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MODID);
+    // Create a Deferred Register to hold CreativeModeTabs which will all be registered under the "arbcraft" namespace
+    public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
+
+    // Creates a new Block with the id "arbcraft:example_block", combining the namespace and path
+    public static final DeferredBlock<Block> EXAMPLE_BLOCK = BLOCKS.registerSimpleBlock("example_block", BlockBehaviour.Properties.of().mapColor(MapColor.STONE));
+    // Creates a new BlockItem with the id "arbcraft:example_block", combining the namespace and path
+    public static final DeferredItem<BlockItem> EXAMPLE_BLOCK_ITEM = ITEMS.registerSimpleBlockItem("example_block", EXAMPLE_BLOCK);
+
+    // Creates a new food item with the id "arbcraft:example_id", nutrition 1 and saturation 2
+    public static final DeferredItem<Item> EXAMPLE_ITEM = ITEMS.registerSimpleItem("example_item", new Item.Properties().food(new FoodProperties.Builder()
+            .alwaysEdible().nutrition(1).saturationModifier(2f).build()));
+    public static final DeferredItem<Item> PICKAXE_OF_HOLY_MOTAL = ITEMS.registerSimpleItem("pickaxe_of_holy_motal",
+            new Item.Properties());
+    // Stack size configuration
+    public static final int LEVELS_PER_STACK_INCREASE = 10; // Every 5 levels = +1 stack size
+    public static final int MAX_BONUS_STACK = 6336; // Maximum bonus stack size
+
+    // The constructor for the mod class is the first code that is run when your mod is loaded.
+    // FML will recognize some parameter types like IEventBus or ModContainer and pass them in automatically.
+    public ArbCraft(IEventBus modEventBus, ModContainer modContainer) {
+        // Register the commonSetup method for modloading
+        modEventBus.addListener(this::commonSetup);
+
+
+        ModMenuTypes.MENU_TYPES.register(modEventBus);
+//        ModItems.CREATIVE_MODE_TABS.register(modEventBus);
+        //Durability Increase
+        
+
+
+
+        // Register the Deferred Register to the mod event bus so blocks get registered
+        BLOCKS.register(modEventBus);
+        // Register the Deferred Register to the mod event bus so items get registered
+        ITEMS.register(modEventBus);
+        // Register the Deferred Register to the mod event bus so tabs get registered
+        CREATIVE_MODE_TABS.register(modEventBus);
+
+        // Register ourselves for server and other game events we are interested in.
+        // Note that this is necessary if and only if we want *this* class (ArbCraft) to respond directly to events.
+        // Do not add this line if there are no @SubscribeEvent-annotated functions in this class, like onServerStarting() below.
+        NeoForge.EVENT_BUS.register(this);
+
+        // Register the item to a creative tab
+        modEventBus.addListener(this::addCreative);
+
+        // Register our mod's ModConfigSpec so that FML can create and load the config file for us
+        modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+
+        NeoForge.EVENT_BUS.register(ModCommands.class);
+
+        //Durability Increase
+//        ModDataComponents.DATA_COMPONENTS.register(modEventBus);
+//        NeoForge.EVENT_BUS.register(EnhancedDurabilityTooltipHandler.class);
+        //NeoForge.EVENT_BUS.register(new MobScalingEventHandler());
+
+        // Register config (optional)
+        //modContainer.registerConfig(ModConfig.Type.SERVER, MobScalingConfig.SPEC, "mobscaling-config.toml");
+        //AttributeModifiers
+        NeoForge.EVENT_BUS.register(AttackSpeedLevelHandler.class);
+        NeoForge.EVENT_BUS.register(HealthBonusLevelHandler.class);
+        NeoForge.EVENT_BUS.register(DamageBonusLevelHandler.class);
+        NeoForge.EVENT_BUS.register(SneakingSpeedLevelHandler.class);
+        NeoForge.EVENT_BUS.register(StepHeightLevelHandler.class);
+        NeoForge.EVENT_BUS.register(EfficiencyBonusLevelHandler.class);
+        NeoForge.EVENT_BUS.register(SwimmingSpeedLevelHandler.class);
+    }
+
+
+    private void commonSetup(FMLCommonSetupEvent event) {
+        // Some common setup code
+        LOGGER.info("HELLO FROM COMMON SETUP");
+
+        if (Config.LOG_DIRT_BLOCK.getAsBoolean()) {
+            LOGGER.info("DIRT BLOCK >> {}", BuiltInRegistries.BLOCK.getKey(Blocks.DIRT));
+        }
+
+        LOGGER.info("{}{}", Config.MAGIC_NUMBER_INTRODUCTION.get(), Config.MAGIC_NUMBER.getAsInt());
+
+        Config.ITEM_STRINGS.get().forEach((item) -> LOGGER.info("ITEM >> {}", item));
+    }
+
+    // Add the example block item to the building blocks tab
+    private void addCreative(BuildCreativeModeTabContentsEvent event) {
+        if (event.getTabKey() == CreativeModeTabs.BUILDING_BLOCKS) {
+            event.accept(EXAMPLE_BLOCK_ITEM);
+        }
+    }
+
+    // You can use SubscribeEvent and let the Event Bus discover methods to call
+    @SubscribeEvent
+    public void onServerStarting(ServerStartingEvent event) {
+        // Do something when the server starts
+        LOGGER.info("HELLO from server starting");
+    }
+
+    // You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
+    @EventBusSubscriber(modid = MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+    public static class ClientModEvents {
+        @SubscribeEvent
+        public static void onClientSetup(FMLClientSetupEvent event) {
+            // Some client setup code
+            LOGGER.info("HELLO FROM CLIENT SETUP");
+            LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
+        }
+    }
+
+    @SubscribeEvent
+    public void onPlayerTick(PlayerTickEvent.Post event) {
+        Player player = event.getEntity();
+        if (player.level().isClientSide) return;
+        int xpLevel = player.experienceLevel;
+        if(player.tickCount % 60 == 0) {
+                manageEffectsForLevel(player, xpLevel);
+        }
+
+
+        // Only run this occasionally to avoid performance issues
+//        if (player.tickCount % 20 == 0) { // Check every second (20 ticks)
+//            adjustExperienceRequirement(player);
+//        }
+
+        if (player.tickCount % 6000 == 0){ //24000 default == 20 mins
+            // Get the current day count from the world
+            long dayCount = player.level().getDayTime() / 24000L;
+            int dayExpPoints = (int) dayCount; // Cast to int for experience points
+//            if(player.level().getDayTime() > 0) //If the server Time in Ticks is greater then Max Int Value
+//            {
+//                player.giveExperiencePoints(dayExpPoints);
+//            }else {
+//                player.giveExperiencePoints(1000);
+//            }
+            player.giveExperiencePoints(dayExpPoints);
+
+        }
+//        if (player.tickCount % 100 == 0) {
+//            // For testing, just print debug info
+//            System.out.println("DEBUG TICK: Player " + player.getName().getString() +
+//                    " Level: " + player.experienceLevel +
+//                    " Tick: " + player.tickCount);
+//        }
+            //Under Development
+//        DurabilityEnhancer.increaseMaxDurabilityByExpLevel(player);
+
+//        if (player.tickCount % 20 == 0) { // Check every second (20 ticks)
+//            // Check for Unbreaking enchantment at level 100
+//            if (xpLevel >= 5000) {
+//                applyUnbreakingToTool(player);
+//            }
+//        }
+    }
+
+
+
+    private void manageEffectsForLevel(Player player, int level) {
+//        applyBestEffect(player, level, MobEffects.DIG_SPEED,
+//                new int[]{10, 50, 110, 200, 400, 800, 1000, 1500, 2000, 2500, 3000, 3500, 4000},
+//                new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}); // HASTE
+//
+//        applyBestEffect(player, level, MobEffects.HEALTH_BOOST,
+//                new int[]{100},
+//                new int[]{0});
+////                new int[]{30, 130, 190, 350, 700, 1000, 1300, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000},
+////                new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
+//
+//        applyBestEffect(player, level, MobEffects.DAMAGE_BOOST,
+//                new int[]{60},
+//                new int[]{0}); // STRENGTH
+
+        applyBestEffect(player, level, MobEffects.MOVEMENT_SPEED,
+                new int[]{500, 2500, 5000},
+                new int[]{0, 1, 2}); // SPEED
+
+
+        applyBestEffect(player, level, MobEffects.REGENERATION,
+                new int[]{500, 2500, 3500, 4500, 5000},
+                new int[]{0, 1, 2, 3, 4});
+
+        applyBestEffect(player, level, MobEffects.DAMAGE_RESISTANCE,
+                new int[]{75, 150, 250},
+                new int[]{0, 1, 2}); // RESISTANCE
+
+        applyBestEffect(player, level, MobEffects.LUCK,
+                new int[]{100, 200, 400, 600, 1000, 1500, 2000, 2500, 3500, 5000},
+                new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+
+        applyBestEffect(player, level, MobEffects.GLOWING,
+                new int[]{1},
+                new int[]{0});
+
+//        applyBestEffect(player, level, MobEffects.WATER_BREATHING,
+//                new int[]{5000},
+//                new int[]{0});
+
+//        applyBestEffect(player, level, MobEffects.NIGHT_VISION,
+//                new int[]{5000},
+//                new int[]{0});
+
+//        applyBestEffect(player, level, MobEffects.DOLPHINS_GRACE,
+//                new int[] {1000},
+//                new int[]{0});
+    }
+
+    private void applyBestEffect(Player player, int playerLevel, Holder effect, int[] requiredLevels, int[] amplifiers) {
+        int bestAmplifier = -1;
+
+        for (int i = 0; i < requiredLevels.length; i++) {
+            if (playerLevel >= requiredLevels[i]) {
+                bestAmplifier = amplifiers[i];
+            }
+        }
+
+        if (bestAmplifier >= 0) {
+            MobEffectInstance currentEffect = player.getEffect(effect);
+
+            if (currentEffect == null) {
+                player.addEffect(new MobEffectInstance(effect, 72000, bestAmplifier, false, false));
+            } else {
+                if (currentEffect.getAmplifier() != bestAmplifier) {
+                    player.removeEffect(effect);
+                    player.addEffect(new MobEffectInstance(effect, 72000, bestAmplifier, false, false));
+                } else if (currentEffect.getDuration() < 200) {
+                    player.removeEffect(effect);
+                    player.addEffect(new MobEffectInstance(effect, 72000, bestAmplifier, false, false));
+                }
+            }
+        } else {
+            if (player.hasEffect(effect)) {
+                player.removeEffect(effect);
+            }
+        }
+    }
+
+
+    @SubscribeEvent
+    public void onBlockBreak(BlockEvent.BreakEvent event) {
+        Player player = event.getPlayer();
+
+        if (player != null && !player.level().isClientSide) {
+            // Determine experience points based on block type
+            int expPoints = 1; // Default experience
+
+            Block brokenBlock = event.getState().getBlock();
+
+            // Check if the broken block is an ore (gives 2 exp instead of 1)
+            if (isOreBlock(brokenBlock)) {
+                expPoints = 5;
+            }
+
+            // Give experience points
+            player.giveExperiencePoints(expPoints);
+
+            // Store who broke this block
+            blockBreakers.put(event.getPos(), player);
+
+            // Clean up old entries after 5 seconds
+            CompletableFuture.delayedExecutor(5, TimeUnit.SECONDS).execute(() -> {
+                blockBreakers.remove(event.getPos());
+            });
+        }
+    }
+
+    private boolean isOreBlock(Block block) {
+        String blockName = block.getDescriptionId().toLowerCase();
+        return blockName.contains("ore") || blockName.contains("ancient_debris") || blockName.contains("amethyst_block");
+    }
+
+//    @SubscribeEvent
+//    public void onBlockBreak(BlockEvent.BreakEvent event) {
+//        // Check if the broken block is stone
+//        //if (event.getState().getBlock() == Blocks.STONE) {
+//        // Check if the breaker is a player
+//        if (event.getPlayer() instanceof Player player) {
+//            //(2 exp = 0.02 * 100)
+//            player.giveExperiencePoints(1);
+//        }
+//
+//        Player player = event.getPlayer();
+//
+//        if (player != null && !player.level().isClientSide) {
+//            // Store who broke this block
+//            blockBreakers.put(event.getPos(), player);
+//
+//            // Clean up old entries after 5 seconds to prevent memory leaks
+//            CompletableFuture.delayedExecutor(5, TimeUnit.SECONDS).execute(() -> {
+//                blockBreakers.remove(event.getPos());
+//            });
+//        }
+//
+//    }
+    //    // Multiplier for experience requirements (0.5 = half the normal requirement, 2.0 = double)
+//    private static final float EXP_MULTIPLIER = 1.0f;
+//
+//    // Base XP for level 1 (you can adjust this value)
+//    private static final int BASE_XP_PER_LEVEL = 11;
+//    //
+////
+//    @SubscribeEvent
+//    public void onExperienceChange(PlayerXpEvent.XpChange event) {
+//        // Adjust experience requirements when experience changes
+//        //adjustExperienceRequirement(event.getEntity());
+//    }
+//
+//    private static void adjustExperienceRequirement(Player player) {
+//        int totalExp = player.totalExperience;
+//        int newLevel = calculateLevelFromTotalExp(totalExp);
+//
+//        if (newLevel != player.experienceLevel) {
+//            int expForCurrentLevel = getTotalLinearExperienceForLevel(newLevel);
+//            int expForNextLevel = getTotalLinearExperienceForLevel(newLevel + 1);
+//            int remainingExp = totalExp - expForCurrentLevel;
+//            int expNeededForNext = expForNextLevel - expForCurrentLevel;
+//
+//            player.experienceLevel = newLevel;
+//            player.experienceProgress = expNeededForNext > 0 ? (float) remainingExp / expNeededForNext : 0.0f;
+//
+//            // Cap at 0.99 to prevent visual glitches
+//            if (player.experienceProgress >= 1.0f) {
+//                player.experienceProgress = 0.99f;
+//            }
+//        }
+//    }
+//    private static int calculateLevelFromTotalExp(int totalExp) {
+//        int level = 0;
+//        int modifiedRequirement = Math.round(getTotalLinearExperienceForLevel(level + 1) * EXP_MULTIPLIER);
+//
+//        while (totalExp >= modifiedRequirement) {
+//            level++;
+//            modifiedRequirement = Math.round(getTotalLinearExperienceForLevel(level + 1) * EXP_MULTIPLIER);
+//        }
+//        return level;
+//    }
+//    private static void levelUpPlayer(Player player, int expRequirement) {
+//        // This method is now handled by adjustExperienceRequirement
+//        adjustExperienceRequirement(player);
+//    }
+//    // XP needed to reach each level: Level 1 = 10, Level 2 = 11, Level 3 = 12, etc.
+//    private static int getLinearExperienceForLevel(int level) {
+//        if (level <= 0) return 0;
+//        return Math.round((BASE_XP_PER_LEVEL + (level - 1)) * EXP_MULTIPLIER);
+//    }
+//    // Total XP needed to reach a specific level (cumulative)
+//    private static int getTotalLinearExperienceForLevel(int level) {
+//        if (level <= 0) return 0;
+//
+//        // Level 1 needs 10, Level 2 needs 11, Level 3 needs 12, etc.
+//        // So total XP to reach level N = 10 + 11 + 12 + ... + (9 + N)
+//        // This is sum of arithmetic sequence: n * (first + last) / 2
+//        // Where first = 10, last = (9 + level), n = level
+//        int first = BASE_XP_PER_LEVEL;
+//        int last = BASE_XP_PER_LEVEL + (level - 1);
+//        int totalXP = level * (first + last) / 2;
+//
+//        return Math.round(totalXP * EXP_MULTIPLIER);
+//    }
+    //AUTO PICK UP
+
+    // Add this field to store the block breaker
+    private static final Map<BlockPos, Player> blockBreakers = new HashMap<>();
+
+    // Add this event handler for block breaking
+//    @SubscribeEvent
+//    public void onBlockBreak(BlockEvent.BreakEvent event) {
+//        Player player = event.getPlayer();
+//        if (player != null && !player.level().isClientSide) {
+//            // Store who broke this block
+//            blockBreakers.put(event.getPos(), player);
+//
+//            // Clean up old entries after 5 seconds to prevent memory leaks
+//            CompletableFuture.delayedExecutor(5, TimeUnit.SECONDS).execute(() -> {
+//                blockBreakers.remove(event.getPos());
+//            });
+//        }
+//    }
+    // Modified item drop handler
+    @SubscribeEvent
+    public void onItemDrop(EntityJoinLevelEvent event) {
+        if (!(event.getEntity() instanceof ItemEntity itemEntity)) {
+            return;
+        }
+        if (event.getLevel().isClientSide) {
+            return;
+        }
+        // Find the player who broke the block at this location
+        BlockPos dropPos = itemEntity.blockPosition();
+        Player blockBreaker = findBlockBreaker(dropPos);
+
+        if (blockBreaker == null) {
+            return;
+        }
+        // Check if player has reached level 250
+        if (blockBreaker.experienceLevel < 100) {
+            return;
+        }
+        // Check if the block breaker is within reasonable distance (prevent teleporting items across the world)
+        if (blockBreaker.distanceToSqr(itemEntity) > 55.0) { //25.0 = 5 block radius
+            return;
+        }
+        // Try to add the item to the block breaker's inventory
+        ItemStack itemStack = itemEntity.getItem();
+        if (canAddToInventory(blockBreaker, itemStack)) {
+            // Add to inventory
+            blockBreaker.getInventory().add(itemStack);
+
+            // Remove the item entity from the world
+            itemEntity.discard();
+
+            // Play pickup sound
+            blockBreaker.level().playSound(null, blockBreaker.getX(), blockBreaker.getY(), blockBreaker.getZ(),
+                    net.minecraft.sounds.SoundEvents.ITEM_PICKUP, net.minecraft.sounds.SoundSource.PLAYERS,
+                    0.2F, ((blockBreaker.getRandom().nextFloat() - blockBreaker.getRandom().nextFloat()) * 0.7F + 1.0F) * 2.0F);
+        }
+    }
+    // Helper method to find who broke the block
+    private Player findBlockBreaker(BlockPos dropPos) {
+        // Check the exact position and nearby positions (items can drop slightly offset)
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                for (int z = -1; z <= 1; z++) {
+                    BlockPos checkPos = dropPos.offset(x, y, z);
+                    Player breaker = blockBreakers.get(checkPos);
+                    if (breaker != null) {
+                        return breaker;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    private boolean canAddToInventory(Player player, ItemStack itemStack) {
+        // Check if the player's inventory has space for this item
+        return player.getInventory().getFreeSlot() != -1 ||
+                player.getInventory().getSlotWithRemainingSpace(itemStack) != -1;
+    }
+    // Helper method to calculate bonus stack size based on player level
+    public static int calculateBonusStackSize(Player player) {
+        if (player == null) return 0;
+        int expLevel = player.experienceLevel;
+        return Math.min(expLevel / LEVELS_PER_STACK_INCREASE, MAX_BONUS_STACK);
+    }
+
+    // BLOCK REACH
+    @EventBusSubscriber(modid = "arbcraft")
+    public class ExtendedBlockReachHandler {
+
+        private static final ResourceLocation REACH_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("yourmodid", "level_based_reach");
+        private static final String REACH_MODIFIER_NAME = "Level Based Block Reach";
+
+        // Configuration constants
+        private static final int LEVELS_PER_REACH = 1000;  // Levels needed per +1 reach
+        private static final int MAX_BONUS_REACH = 5;     // Maximum bonus reach blocks
+        private static final int MAX_EFFECTIVE_LEVEL = MAX_BONUS_REACH * LEVELS_PER_REACH; // 10,000 levels
+
+        public static double calculateBonusReach(int level) {
+            // Cap the level at the maximum effective level
+            int effectiveLevel = Math.min(level, MAX_EFFECTIVE_LEVEL);
+            return Math.floor(effectiveLevel / (double) LEVELS_PER_REACH);
+        }
+
+        /**
+         * Updates the player's block reach attribute based on their current level
+         * @param player The player to update
+         */
+        public static void updatePlayerReach(Player player) {
+            if (player == null || player.level().isClientSide) {
+                return;
+            }
+
+            int playerLevel = player.experienceLevel;
+            double bonusReach = calculateBonusReach(playerLevel);
+
+            // Get the reach attribute
+            var reachAttribute = player.getAttribute(Attributes.BLOCK_INTERACTION_RANGE);
+            if (reachAttribute == null) {
+                return;
+            }
+
+            // Always remove existing modifier first to prevent duplicates
+            boolean hadModifier = reachAttribute.getModifier(REACH_MODIFIER_ID) != null;
+            if (hadModifier) {
+                reachAttribute.removeModifier(REACH_MODIFIER_ID);
+            }
+
+            // Add new modifier if bonus reach > 0
+            if (bonusReach > 0) {
+                AttributeModifier modifier = new AttributeModifier(
+                        REACH_MODIFIER_ID,
+                        bonusReach, // value
+                        AttributeModifier.Operation.ADD_VALUE
+                );
+                reachAttribute.addTransientModifier(modifier); // Use transient instead of permanent
+            }
+        }
+
+        @SubscribeEvent
+        public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
+            updatePlayerReach(event.getEntity());
+        }
+
+        @SubscribeEvent
+        public static void onPlayerLevelChange(PlayerEvent.PlayerChangedDimensionEvent event) {
+            updatePlayerReach(event.getEntity());
+        }
+
+        @SubscribeEvent
+        public static void onPlayerTick(PlayerTickEvent.Post event) {
+            Player player = event.getEntity();
+
+            // Only check every 20 ticks (1 second) and only on server side
+            if (player.level().isClientSide || player.tickCount % 20 != 0) {
+                return;
+            }
+
+            // Store the last known level to avoid unnecessary updates
+            int currentLevel = player.experienceLevel;
+            int lastStoredLevel = player.getPersistentData().getInt("LastReachLevel");
+
+            if (currentLevel != lastStoredLevel) {
+                // Level changed, update reach
+                updatePlayerReach(player);
+                player.getPersistentData().putInt("LastReachLevel", currentLevel);
+            }
+        }
+
+
+        public static int getMaxBonusReach() {
+            return MAX_BONUS_REACH;
+        }
+
+        public static int getLevelForMaxReach() {
+            return MAX_EFFECTIVE_LEVEL;
+        }
+
+        public static boolean hasMaxBonusReach(Player player) {
+            return player.experienceLevel >= MAX_EFFECTIVE_LEVEL;
+        }
+
+        public static double getTotalBlockReach(Player player) {
+            var attribute = player.getAttribute(Attributes.BLOCK_INTERACTION_RANGE);
+            return attribute != null ? attribute.getValue() : 4.5; // Default reach is 4.5 blocks
+        }
+    }
+}
+
+

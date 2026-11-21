@@ -1,0 +1,24 @@
+{
+  "itemGroup.arbcraft": "ArbCraft: Leveling",
+  "block.arbcraft.example_block": "Example Block",
+  "item.arbcraft.example_item": "Example Item",
+
+  "block.arbcraft.ore_block_of_arbrium": "Arbrium Ore",
+
+
+  "arbcraft.configuration.title": "ArbCraft Configs",
+  "arbcraft.configuration.section.arbcraft.common.toml": "ArbCraft Configs",
+  "arbcraft.configuration.section.arbcraft.common.toml.title": "ArbCraft Configs",
+  "arbcraft.configuration.items": "Item List",
+  "arbcraft.configuration.logDirtBlock": "Log Dirt Block",
+  "arbcraft.configuration.magicNumberIntroduction": "Magic Number Text",
+  "arbcraft.configuration.magicNumber": "Magic Number",
+
+  "container.arbcraft.experience_converter": "Experience Converter",
+  "block.arbcraft.experience_converter": "Experience Converter",
+
+  "block.arbcraft.crusher": "Crusher",
+  "container.arbcraft.crusher": "Crusher",
+  "itemGroup.arbcraft.arbcraft_tab": "ArbCraft"
+
+}

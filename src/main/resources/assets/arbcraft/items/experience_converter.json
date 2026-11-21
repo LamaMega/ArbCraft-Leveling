@@ -1,0 +1,13 @@
+{
+  "parent": "block/cube",
+  "textures": {
+    "down": "arbcraft:block/experience_converter",
+    "up": "arbcraft:block/experience_converter",
+    "north": "arbcraft:block/experience_converter",
+    "east": "arbcraft:block/experience_converter",
+    "south": "arbcraft:block/experience_converter",
+    "west": "arbcraft:block/experience_converter",
+    "particle": "arbcraft:block/experience_converter"
+  },
+  "render_type": "solid"
+}

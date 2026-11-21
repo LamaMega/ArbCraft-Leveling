@@ -1,0 +1,10 @@
+{
+  "type": "arbcraft:crushing",
+  "ingredient": {
+    "item": "minecraft:white_wool"
+  },
+  "result": {
+    "id": "minecraft:string",
+    "count": 2
+  }
+}

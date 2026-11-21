@@ -1,0 +1,278 @@
+package net.attarax.arbcraft.commands;
+
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.FloatArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import net.attarax.arbcraft.ArbCraft;
+import net.attarax.arbcraft.components.ModDataComponents;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+
+
+@EventBusSubscriber(modid = "arbcraft")
+public class ModCommands {
+
+    // -----------------------------------------------------------------------
+    // Tool Upgrade Balance Variables — adjust these as needed
+    // -----------------------------------------------------------------------
+    private static final int XP_COST_PER_UPGRADE   = 10;   // XP levels consumed per upgrade
+    private static final int DURABILITY_PER_UPGRADE = 25;   // Max durability added per upgrade
+    private static int MAX_UPGRADES           = 1000; // Hard cap of upgrades per item
+    // -----------------------------------------------------------------------
+
+    public static void setMaxUpgrades(int value)
+    {
+        MAX_UPGRADES = value;
+    }
+
+    @SubscribeEvent
+    public static void registerCommands(RegisterCommandsEvent event) {
+
+        // --- Tool Upgrade Command ---
+        event.getDispatcher().register(
+                Commands.literal("arbcraft_durability_upgrade")
+                        .requires(source -> true) // All players can use this
+                        .executes(context -> {
+                            if (!(context.getSource().getEntity() instanceof Player player)) {
+                                context.getSource().sendFailure(
+                                        Component.literal("This command can only be run by a player."));
+                                return 0;
+                            }
+                            return applyToolUpgrade(player);
+                        })
+        );
+        event.getDispatcher().register(
+                Commands.literal("arbcraft_durability_max_upgrade")
+                        .requires(source -> source.hasPermission(2))
+                        .then(Commands.literal("MaxUpgrade")
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(0, 1000000))
+                                        .executes(context -> {
+                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                            ModCommands.setMaxUpgrades(amount);
+                                            context.getSource().sendSuccess(
+                                                    () -> Component.literal("§aMax Tool Durability Upgrade has been set to: " + amount),
+                                                    true
+                                            );
+                                            return 1;
+                                        })
+                                )
+                        )
+        );
+        // --- Config Command ---
+        event.getDispatcher().register(
+                Commands.literal("arbcraft_config")
+                        .requires(source -> source.hasPermission(2))
+                        .then(Commands.literal("normalexp")
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(0, 1000000))
+                                        .executes(context -> {
+                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                            ArbCraft.setNormalBlockExp(amount);
+                                            context.getSource().sendSuccess(
+                                                    () -> Component.literal("§aNormal block exp set to: " + amount),
+                                                    true
+                                            );
+                                            return 1;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("oreexp")
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(0, 1000000))
+                                        .executes(context -> {
+                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                            ArbCraft.setOreBlockExp(amount);
+                                            context.getSource().sendSuccess(
+                                                    () -> Component.literal("§aOre block exp set to: " + amount),
+                                                    true
+                                            );
+                                            return 1;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("bonusBlockExp")
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(0, 1000000))
+                                        .executes(context -> {
+                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                            ArbCraft.setBonusBlockExp(amount);
+                                            context.getSource().sendSuccess(
+                                                    () -> Component.literal("§aBonus block exp set to: " + amount),
+                                                    true
+                                            );
+                                            return 1;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("bonusTickMultiplier")
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(0, 1000))
+                                        .executes(context -> {
+                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                            ArbCraft.setBonusTickMultiplier(amount);
+                                            context.getSource().sendSuccess(
+                                                    () -> Component.literal("§aSet the bonus tick Multiplier per 100 Levels: " + amount),
+                                                    true
+                                            );
+                                            return 1;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("increasedBonusTickMultiplier")
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(0, 1000))
+                                        .executes(context -> {
+                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+                                            ArbCraft.setIncreasedBonusTickMultiplier(amount);
+                                            context.getSource().sendSuccess(
+                                                    () -> Component.literal("§aSet the bonus tick Multiplier per 100 Levels after Level 5000: " + amount),
+                                                    true
+                                            );
+                                            return 1;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("view")
+                                .executes(context -> {
+                                    context.getSource().sendSuccess(
+                                            () -> Component.literal("§6Current Exp Settings:\n" +
+                                                    "§7Normal Blocks Exp: §e" + ArbCraft.getNormalBlockExp() + "\n" +
+                                                    "§7Ore Blocks Exp: §e" + ArbCraft.getOreBlockExp() + "\n" +
+                                                    "§7Bonus Tick Multiplier: §e" + ArbCraft.getBonusTickMultiplier() + "\n" +
+                                                    "§7Increased Bonus Tick Multiplier After 5000: §e" + ArbCraft.getIncreasedBonusTickMultiplier()),
+                                            false
+                                    );
+                                    return 1;
+                                })
+                        )
+        );
+
+        // --- Attribute Config Command ---
+        event.getDispatcher().register(
+                Commands.literal("arbcraft_attribute_config")
+                        .requires(source -> source.hasPermission(2))
+                        .then(Commands.literal("hpPerLevel")
+                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0, 100))
+                                        .executes(context -> {
+                                            float amount = FloatArgumentType.getFloat(context, "amount");
+                                            ArbCraft.setHealthModifier(amount);
+                                            context.getSource().sendSuccess(
+                                                    () -> Component.literal("§aHp Per Level Set To: " + amount),
+                                                    true
+                                            );
+                                            return 1;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("damagePerLevel")
+                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0, 1000))
+                                        .executes(context -> {
+                                            float amount = FloatArgumentType.getFloat(context, "amount");
+                                            ArbCraft.setDamageModifer(amount);
+                                            context.getSource().sendSuccess(
+                                                    () -> Component.literal("§aDamage Per Level Set To: " + amount),
+                                                    true
+                                            );
+                                            return 1;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("efficiencyPerLevel")
+                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0, 1000))
+                                        .executes(context -> {
+                                            float amount = FloatArgumentType.getFloat(context, "amount");
+                                            ArbCraft.setEfficiencyModifier(amount);
+                                            context.getSource().sendSuccess(
+                                                    () -> Component.literal("§aEfficiency Per Level Set To: " + amount),
+                                                    true
+                                            );
+                                            return 1;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("attackSpeedPerLevel")
+                                .then(Commands.argument("amount", FloatArgumentType.floatArg(0, 1000))
+                                        .executes(context -> {
+                                            float amount = FloatArgumentType.getFloat(context, "amount");
+                                            ArbCraft.setAttackSpeedModifier(amount);
+                                            context.getSource().sendSuccess(
+                                                    () -> Component.literal("§aAttack Speed Per Level Set To: " + amount),
+                                                    true
+                                            );
+                                            return 1;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("view")
+                                .executes(context -> {
+                                    context.getSource().sendSuccess(
+                                            () -> Component.literal("§6Current Attribute Settings:\n" +
+                                                    "§7(Default:0.07) Health Per Level: §e" + ArbCraft.getHealthModifier() + "\n" +
+                                                    "§7(Default:0.07) Damage Per Level: §e" + ArbCraft.getDamageModifier() + "\n" +
+                                                    "§7(Default:0.03) Efficiency Per Level: §e" + ArbCraft.getEfficiencyModifier() + "\n" +
+                                                    "§7(Default:0.0003) Attack Speed Per Level: §e" + ArbCraft.getAttackSpeedModifier()),
+                                            false
+                                    );
+                                    return 1;
+                                })
+                        )
+        );
+    }
+
+    /**
+     * Handles all validation and application of a single tool durability upgrade.
+     * Returns 1 on success, 0 on failure (Brigadier convention).
+     */
+    private static int applyToolUpgrade(Player player) {
+        ItemStack heldItem = player.getMainHandItem();
+
+        // Must be holding a damageable item
+        if (heldItem.isEmpty() || !heldItem.has(DataComponents.MAX_DAMAGE)) {
+            player.sendSystemMessage(Component.literal(
+                    "§cYou must hold a tool, weapon, or piece of equipment to upgrade!"));
+            return 0;
+        }
+
+        // Check upgrade cap
+        int currentUpgrades = heldItem.getOrDefault(ModDataComponents.UPGRADE_COUNT.get(), 0);
+        if (currentUpgrades >= MAX_UPGRADES) {
+            player.sendSystemMessage(Component.literal(
+                    "§cThis item has reached the maximum upgrade limit of §e"
+                            + MAX_UPGRADES + "§c!"));
+            return 0;
+        }
+
+        // Check XP
+        if (player.experienceLevel < XP_COST_PER_UPGRADE) {
+            player.sendSystemMessage(Component.literal(
+                    "§cYou need at least §e" + XP_COST_PER_UPGRADE
+                            + " §cexperience levels to upgrade! You currently have §e"
+                            + player.experienceLevel + "§c."));
+            return 0;
+        }
+
+        // Apply upgrade
+        int newMaxDamage    = heldItem.get(DataComponents.MAX_DAMAGE) + DURABILITY_PER_UPGRADE;
+        int newUpgradeCount = currentUpgrades + 1;
+
+        heldItem.set(DataComponents.MAX_DAMAGE, newMaxDamage);
+        heldItem.set(ModDataComponents.UPGRADE_COUNT.get(), newUpgradeCount);
+        player.giveExperienceLevels(-XP_COST_PER_UPGRADE);
+
+        player.sendSystemMessage(Component.literal(
+                "§aUpgrade applied! §7("
+                        + newUpgradeCount + "§7/§f" + MAX_UPGRADES + "§7) "
+                        + "§7New max durability: §f" + newMaxDamage
+                        + " §7| XP remaining: §f" + player.experienceLevel));
+
+        return 1;
+    }
+
+    private static double getDayFactor(ServerLevel level) {
+        return level.getDayTime() / 24000L;
+    }
+}
