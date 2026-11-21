@@ -12,6 +12,7 @@ import net.attarax.arbcraft.config.ExperienceConverterConfig;
 import net.attarax.arbcraft.gui.ModMenuTypes;
 import net.attarax.arbcraft.network.NetworkHandler;
 import net.attarax.arbcraft.recipes.ModRecipes;
+import net.attarax.arbcraft.toollevel.ToolLevelComponents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
@@ -102,6 +103,7 @@ static boolean effectEnabled = true;
         ModDataComponents.register(modEventBus);
         ConfigReloadHandler.initialize();
         NeoForge.EVENT_BUS.register(new MobScalingEventHandler());
+        ToolLevelComponents.register(modEventBus);
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
@@ -361,14 +363,14 @@ static boolean effectEnabled = true;
             /// v.1.3.6.9
             if(level >= 100)
             {
-                normalExp += 1 + (player.experienceLevel / 100);
+                normalExp += 1 + (player.experienceLevel / 75);
             }
 
             else if(player.experienceLevel >= 50)
             {
 
-                oreExp = player.experienceLevel / 20;
-                bonusExp = player.experienceLevel / 40;
+                oreExp = player.experienceLevel / 15;
+                bonusExp = player.experienceLevel / 30;
             }
 
 
