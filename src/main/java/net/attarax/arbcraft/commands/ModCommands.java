@@ -29,7 +29,7 @@ public class ModCommands {
     // -----------------------------------------------------------------------
     // Tool Upgrade Balance Variables — adjust these as needed
     // -----------------------------------------------------------------------
-    private static final int XP_COST_PER_UPGRADE   = 10;   // XP levels consumed per upgrade
+    private static final int XP_COST_PER_UPGRADE   = 5;   // XP levels consumed per upgrade
     private static final int DURABILITY_PER_UPGRADE = 25;   // Max durability added per upgrade
     private static int MAX_UPGRADES                 = 1000; // Hard cap of upgrades per item
     // -----------------------------------------------------------------------

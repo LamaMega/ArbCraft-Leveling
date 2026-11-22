@@ -13,7 +13,7 @@ public class EfficiencyBonusLevelHandler {
     // ResourceLocation for the attack speed modifier - replace "yourmodid" with your actual mod ID
     private static final ResourceLocation MINING_EFFICIENCY_BONUS_ID = ResourceLocation.fromNamespaceAndPath("arbcraft", "level_mining_efficiency_bonus");
 
-        public static double efficiencyModifier = 0.01;
+        public static double efficiencyModifier = 0.001;
 
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {

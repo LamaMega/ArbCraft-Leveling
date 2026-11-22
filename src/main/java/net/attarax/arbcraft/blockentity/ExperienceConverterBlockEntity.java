@@ -22,6 +22,9 @@ import org.jetbrains.annotations.Nullable;
 
 public class ExperienceConverterBlockEntity extends BlockEntity implements MenuProvider {
 
+    /** Max items the input slot can hold (vanilla would be 64). Change to whatever you want. */
+    public static final int INPUT_SLOT_LIMIT = 2147483646;
+
     private final ItemStackHandler inventory = new ItemStackHandler(1) {
         @Override
         protected void onContentsChanged(int slot) {
@@ -31,6 +34,17 @@ public class ExperienceConverterBlockEntity extends BlockEntity implements MenuP
         @Override
         public boolean isItemValid(int slot, ItemStack stack) {
             return ExperienceConverterConfig.getExperienceValue(stack.getItem()) > 0;
+        }
+
+        @Override
+        public int getSlotLimit(int slot) {
+            return INPUT_SLOT_LIMIT;
+        }
+
+        // Without this, insertItem (hoppers, pipes, shift-click) still caps at the item's own max stack size.
+        @Override
+        protected int getStackLimit(int slot, ItemStack stack) {
+            return stack.getMaxStackSize() <= 1 ? 1 : getSlotLimit(slot);
         }
     };
 
@@ -227,202 +241,3 @@ public class ExperienceConverterBlockEntity extends BlockEntity implements MenuP
     public int getUpgradeLevel()       { return upgradeLevel; }
     public ContainerData getData()     { return data; }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//package net.attarax.arbcraft.blockentity;
-//
-//import net.attarax.arbcraft.blocks.ModBlocks;
-//import net.attarax.arbcraft.config.ExperienceConverterConfig;
-//import net.attarax.arbcraft.menu.ExperienceConverterMenu;
-//import net.minecraft.core.BlockPos;
-//import net.minecraft.core.Direction;
-//import net.minecraft.core.HolderLookup;
-//import net.minecraft.nbt.CompoundTag;
-//import net.minecraft.network.chat.Component;
-//import net.minecraft.world.MenuProvider;
-//import net.minecraft.world.entity.player.Inventory;
-//import net.minecraft.world.entity.player.Player;
-//import net.minecraft.world.inventory.AbstractContainerMenu;
-//import net.minecraft.world.inventory.ContainerData;
-//import net.minecraft.world.item.ItemStack;
-//import net.minecraft.world.level.Level;
-//import net.minecraft.world.level.block.entity.BlockEntity;
-//import net.minecraft.world.level.block.state.BlockState;
-//import net.neoforged.neoforge.items.ItemStackHandler;
-//import net.neoforged.neoforge.items.wrapper.SidedInvWrapper;
-//import net.neoforged.neoforge.capabilities.Capabilities;
-//import net.neoforged.neoforge.capabilities.BlockCapability;
-//import org.jetbrains.annotations.Nullable;
-//
-//public class ExperienceConverterBlockEntity extends BlockEntity implements MenuProvider {
-//
-//    private final ItemStackHandler inventory = new ItemStackHandler(1) {
-//        @Override
-//        protected void onContentsChanged(int slot) {
-//            setChanged();
-//        }
-//
-//        @Override
-//        public boolean isItemValid(int slot, ItemStack stack) {
-//            return ExperienceConverterConfig.getExperienceValue(stack.getItem()) > 0;
-//        }
-//    };
-//
-//    private int storedExperience = 0;
-//    private int conversionProgress = 0;
-//    private static final int CONVERSION_TIME = 20; //default 100
-//
-//    protected final ContainerData data = new ContainerData() {
-//        @Override
-//        public int get(int index) {
-//            return switch (index) {
-//                case 0 -> ExperienceConverterBlockEntity.this.storedExperience;
-//                case 1 -> ExperienceConverterBlockEntity.this.conversionProgress;
-//                case 2 -> ExperienceConverterBlockEntity.this.CONVERSION_TIME;
-//                default -> 0;
-//            };
-//        }
-//
-//        @Override
-//        public void set(int index, int value) {
-//            switch (index) {
-//                case 0 -> ExperienceConverterBlockEntity.this.storedExperience = value;
-//                case 1 -> ExperienceConverterBlockEntity.this.conversionProgress = value;
-//            }
-//        }
-//
-//        @Override
-//        public int getCount() {
-//            return 3;
-//        }
-//    };
-//
-//    public ExperienceConverterBlockEntity(BlockPos pos, BlockState state) {
-//        super(ModBlocks.EXPERIENCE_CONVERTER_BLOCK_ENTITY.get(), pos, state);
-//    }
-//
-//    public ItemStackHandler getInventory() {
-//        return inventory;
-//    }
-//
-//    // Expose capability for item handling
-//    public net.neoforged.neoforge.items.IItemHandler getItemHandler(@Nullable Direction side) {
-//        return inventory;
-//    }
-//
-//    public int getStoredExperience() {
-//        return storedExperience;
-//    }
-//
-//    public int getConversionProgress() {
-//        return conversionProgress;
-//    }
-//
-//    public int getMaxProgress() {
-//        return CONVERSION_TIME;
-//    }
-//
-//    public ContainerData getData() {
-//        return data;
-//    }
-//
-//    public void addStoredExperience(int amount) {
-//        this.storedExperience += amount;
-//        setChanged();
-//    }
-//
-//    public boolean withdrawExperience(Player player, int amount) {
-//        if (storedExperience >= amount) {
-//            storedExperience -= amount;
-//            player.giveExperiencePoints(amount);
-//            setChanged();
-//            return true;
-//        }
-//        return false;
-//    }
-//
-//    public boolean withdrawAllExperience(Player player) {
-//        if (storedExperience > 0) {
-//            player.giveExperiencePoints(storedExperience);
-//            storedExperience = 0;
-//            setChanged();
-//            return true;
-//        }
-//        return false;
-//    }
-//
-//    public static void serverTick(Level level, BlockPos pos, BlockState state, ExperienceConverterBlockEntity be) {
-//        if (level.isClientSide) return;
-//
-//        ItemStack stack = be.inventory.getStackInSlot(0);
-//        if (!stack.isEmpty()) {
-//            be.conversionProgress++;
-//
-//            if (be.conversionProgress >= CONVERSION_TIME) {
-//                int expValue = ExperienceConverterConfig.getExperienceValue(stack.getItem());
-//                if (expValue > 0) {
-//                    be.storedExperience += expValue;
-//                    stack.shrink(1);
-//                    be.conversionProgress = 0;
-//                    be.setChanged();
-//                }
-//            }
-//        } else {
-//            be.conversionProgress = 0;
-//        }
-//    }
-//
-//    @Override
-//    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-//        super.saveAdditional(tag, registries);
-//        tag.put("Inventory", inventory.serializeNBT(registries));
-//        tag.putInt("StoredExperience", storedExperience);
-//        tag.putInt("ConversionProgress", conversionProgress);
-//    }
-//
-//    @Override
-//    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-//        super.loadAdditional(tag, registries);
-//        inventory.deserializeNBT(registries, tag.getCompound("Inventory"));
-//        storedExperience = tag.getInt("StoredExperience");
-//        conversionProgress = tag.getInt("ConversionProgress");
-//    }
-//
-//    @Override
-//    public Component getDisplayName() {
-//        return Component.translatable("container.arbcraft.experience_converter");
-//    }
-//
-//    @Nullable
-//    @Override
-//    public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {
-//        return new ExperienceConverterMenu(containerId, playerInventory, this, this.data);
-//    }
-//}

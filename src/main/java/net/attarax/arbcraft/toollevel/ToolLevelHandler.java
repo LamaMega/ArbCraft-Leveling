@@ -2,12 +2,16 @@ package net.attarax.arbcraft.toollevel;
 
 import net.attarax.arbcraft.ArbCraft;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EquipmentSlotGroup;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
@@ -16,6 +20,8 @@ import net.minecraft.world.item.DiggerItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
+import net.minecraft.world.item.component.Tool;
+import net.minecraft.world.level.block.Block;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.common.util.FakePlayer;
@@ -27,9 +33,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Tool leveling: every USES_PER_LEVEL uses a tool gains a level.
- * Each level gives:
- *   +1 max durability, +0.1 attack damage, +0.05 mining efficiency (diggers only).
+ * Tool leveling: tools gain levels from use, and each level gives
+ *   +durability, +attack damage, +mining efficiency (diggers only).
+ * Every TIER_LEVEL_INTERVAL levels, digger tools also gain +1 mining tier
+ * (e.g. a stone pickaxe at level 50 can mine diamond ore).
  *
  * Works for pickaxe, axe, shovel, hoe (DiggerItem) and sword (SwordItem),
  * including modded tools that extend those classes.
@@ -39,16 +46,31 @@ public class ToolLevelHandler {
 
     // ---- Tuning ----
     public static final int USES_PER_LEVEL = 250;
-    public static int DURABILITY_PER_LEVEL = 5;
+    public static final int DURABILITY_PER_LEVEL = 5;
     public static final double DAMAGE_PER_LEVEL = 0.1;
     public static final double EFFICIENCY_PER_LEVEL = 0.05;
-    /** Each level needs this fraction more uses than the previous one (0.05 = +5%). */
-    public static final double REQUIREMENT_GROWTH = 0.035;
+    /** Each level needs this fraction more uses than the previous one (0.035 = +3.5%). */
+    public static final double REQUIREMENT_GROWTH = 0.07;
+    /** The requirement for a single level never grows past this many uses. */
+    public static final long MAX_USES_PER_LEVEL = 10000;
+    /** Every this many levels, digger tools gain +1 mining tier. */
+    public static final int TIER_LEVEL_INTERVAL = 50;
 
     private static final ResourceLocation DAMAGE_ID =
             ResourceLocation.fromNamespaceAndPath(ArbCraft.MODID, "tool_level_damage");
     private static final ResourceLocation EFFICIENCY_ID =
             ResourceLocation.fromNamespaceAndPath(ArbCraft.MODID, "tool_level_efficiency");
+
+    /**
+     * Tiers from lowest to highest, as the "incorrect for drops" tag of each tier.
+     * Gold counts as the same tier as wood.
+     */
+    private static final List<TagKey<Block>> TIER_TAGS = List.of(
+            BlockTags.INCORRECT_FOR_WOODEN_TOOL,
+            BlockTags.INCORRECT_FOR_STONE_TOOL,
+            BlockTags.INCORRECT_FOR_IRON_TOOL,
+            BlockTags.INCORRECT_FOR_DIAMOND_TOOL,
+            BlockTags.INCORRECT_FOR_NETHERITE_TOOL);
 
     // ---- Helpers ----
 
@@ -61,9 +83,10 @@ public class ToolLevelHandler {
         return stack.getOrDefault(ToolLevelComponents.TOOL_USES.get(), 0);
     }
 
-    /** Uses needed to go from `level` to `level + 1`: 250, 263, 276, ... (+5% each level). */
+    /** Uses needed to go from `level` to `level + 1`, growing each level and capped at MAX_USES_PER_LEVEL. */
     public static long usesToNextLevel(int level) {
-        return Math.max(1L, Math.round(USES_PER_LEVEL * Math.pow(1.0 + REQUIREMENT_GROWTH, level)));
+        long required = Math.round(USES_PER_LEVEL * Math.pow(1.0 + REQUIREMENT_GROWTH, level));
+        return Math.min(MAX_USES_PER_LEVEL, Math.max(1L, required));
     }
 
     /** Level, progress into the current level, and uses required for the next level. */
@@ -73,16 +96,27 @@ public class ToolLevelHandler {
         long remaining = totalUses;
         int level = 0;
         long required = usesToNextLevel(level);
-        while (remaining >= required) {
+        while (remaining >= required && required < MAX_USES_PER_LEVEL) {
             remaining -= required;
             level++;
             required = usesToNextLevel(level);
+        }
+        if (required >= MAX_USES_PER_LEVEL) {
+            // Every further level costs exactly the cap, so skip the loop
+            level += (int) (remaining / MAX_USES_PER_LEVEL);
+            remaining %= MAX_USES_PER_LEVEL;
+            required = MAX_USES_PER_LEVEL;
         }
         return new LevelInfo(level, remaining, required);
     }
 
     public static int getLevel(ItemStack stack) {
         return getLevelInfo(getUses(stack)).level();
+    }
+
+    /** How many mining tiers a tool of this level has gained. */
+    public static int getBonusTiers(int level) {
+        return level / TIER_LEVEL_INTERVAL;
     }
 
     /** Counts one use of the stack and levels it up when the threshold is reached. */
@@ -97,10 +131,17 @@ public class ToolLevelHandler {
             int level = info.level();
             applyLevelBonuses(stack, level);
 
-            player.displayClientMessage(
-                    Component.literal("Tool level up! Level " + level).withStyle(ChatFormatting.GOLD), true);
+            boolean tierUp = stack.getItem() instanceof DiggerItem
+                    && level % TIER_LEVEL_INTERVAL == 0;
+            Component message = tierUp
+                    ? Component.literal("Tool level " + level + "! Mining tier increased!")
+                    .withStyle(ChatFormatting.AQUA)
+                    : Component.literal("Tool level up! Level " + level)
+                    .withStyle(ChatFormatting.GOLD);
+
+            player.displayClientMessage(message, true);
             player.level().playSound(null, player.blockPosition(),
-                    SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.5F, 1.4F);
+                    SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.5F, tierUp ? 1.0F : 1.4F);
         }
     }
 
@@ -144,6 +185,55 @@ public class ToolLevelHandler {
 
         stack.set(DataComponents.ATTRIBUTE_MODIFIERS,
                 new ItemAttributeModifiers(List.copyOf(entries), existing.showInTooltip()));
+
+        applyTierBonus(stack, level);
+    }
+
+    /**
+     * Raises the tool's mining tier by getBonusTiers(level).
+     * A tool's tier is the "incorrect for drops" rule inside its Tool component, e.g. a stone
+     * pickaxe denies drops for blocks in #minecraft:incorrect_for_stone_tool. Swapping that tag for
+     * the next tier's tag lets the tool harvest the next tier of blocks. Rebuilt from the item's
+     * base Tool component every time, so it never stacks twice.
+     * Tools with custom tiers (rules we don't recognise) are left unchanged.
+     */
+    private static void applyTierBonus(ItemStack stack, int level) {
+        if (!(stack.getItem() instanceof DiggerItem)) return;
+
+        Tool base = stack.getItem().components().get(DataComponents.TOOL);
+        if (base == null) return;
+
+        int bonus = getBonusTiers(level);
+        if (bonus <= 0) {
+            stack.set(DataComponents.TOOL, base);
+            return;
+        }
+
+        List<Tool.Rule> rules = new ArrayList<>();
+        for (Tool.Rule rule : base.rules()) {
+            Tool.Rule newRule = rule;
+
+            boolean isDenyRule = rule.correctForDrops().isPresent() && !rule.correctForDrops().get();
+            if (isDenyRule && rule.blocks() instanceof HolderSet.Named<Block> named) {
+                int index = tierIndex(named.key());
+                if (index >= 0) {
+                    int target = Math.min(index + bonus, TIER_TAGS.size() - 1);
+                    newRule = new Tool.Rule(
+                            BuiltInRegistries.BLOCK.getOrCreateTag(TIER_TAGS.get(target)),
+                            rule.speed(),
+                            rule.correctForDrops());
+                }
+            }
+            rules.add(newRule);
+        }
+
+        stack.set(DataComponents.TOOL,
+                new Tool(List.copyOf(rules), base.defaultMiningSpeed(), base.damagePerBlock()));
+    }
+
+    private static int tierIndex(TagKey<Block> tag) {
+        if (tag.equals(BlockTags.INCORRECT_FOR_GOLD_TOOL)) return 0; // gold == wood tier
+        return TIER_TAGS.indexOf(tag);
     }
 
     private static double round(double value) {
@@ -185,7 +275,7 @@ public class ToolLevelHandler {
         addUse(player, event.getContext().getItemInHand());
     }
 
-    /** Shows the level and progress in the item tooltip. */
+    /** Shows the level, progress and bonus mining tier in the item tooltip. */
     @SubscribeEvent
     public static void onTooltip(ItemTooltipEvent event) {
         ItemStack stack = event.getItemStack();
@@ -196,5 +286,11 @@ public class ToolLevelHandler {
                 .withStyle(ChatFormatting.GOLD));
         event.getToolTip().add(Component.literal("Progress: " + info.progress() + "/" + info.required())
                 .withStyle(ChatFormatting.GRAY));
+
+        int bonusTiers = getBonusTiers(info.level());
+        if (bonusTiers > 0 && stack.getItem() instanceof DiggerItem) {
+            event.getToolTip().add(Component.literal("Mining tier +" + bonusTiers)
+                    .withStyle(ChatFormatting.AQUA));
+        }
     }
 }

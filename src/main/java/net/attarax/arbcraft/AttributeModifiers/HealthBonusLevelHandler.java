@@ -13,7 +13,7 @@ public class HealthBonusLevelHandler {
     // ResourceLocation for the attack speed modifier - replace "yourmodid" with your actual mod ID
     private static final ResourceLocation HEALTH_BONUS_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("arbcraft", "level_health_bonus");
 
-    public static double healthModifier = 0.05; //0.07 to 0.05
+    public static double healthModifier = 0.025; //0.07 to 0.05
 
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
