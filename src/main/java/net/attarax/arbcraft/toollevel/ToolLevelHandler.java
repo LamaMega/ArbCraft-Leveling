@@ -41,10 +41,11 @@ import java.util.List;
  * Every TIER_LEVEL_INTERVAL levels, digger tools also gain +1 mining tier
  * (e.g. a stone pickaxe at level 50 can mine diamond ore).
  * Breaking an ore block gives ORE_USES progress instead of 1.
+ * Every PLAYER_LEVELS_PER_BONUS player (XP) levels add +1 progress to ore breaks and kills.
  *
  * Non-sword tools (DiggerItem) gain progress per block they break, so a tool that
  * breaks several blocks at once (area / vein miners) gets progress for every block.
- * Swords only gain progress from melee hits.
+ * Swords only gain progress from melee hits and kills.
  *
  * Works for pickaxe, axe, shovel, hoe (DiggerItem) and sword (SwordItem),
  * including modded tools that extend those classes.
@@ -53,20 +54,22 @@ import java.util.List;
 public class ToolLevelHandler {
 
     // ---- Tuning ----
-    public static final int USES_PER_LEVEL = 250;
-    public static final int DURABILITY_PER_LEVEL = 5;
+    public static final int USES_PER_LEVEL = 255;
+    public static final int DURABILITY_PER_LEVEL = 6;
     public static final double DAMAGE_PER_LEVEL = 0.1;
     public static final double EFFICIENCY_PER_LEVEL = 0.05;
     /** Each level needs this fraction more uses than the previous one (0.07 = +7%). */
     public static final double REQUIREMENT_GROWTH = 0.07;
     /** The requirement for a single level never grows past this many uses. */
-    public static final long MAX_USES_PER_LEVEL = 10000;
+    public static final long MAX_USES_PER_LEVEL = 7500;
     /** Every this many levels, digger tools gain +1 mining tier. */
     public static final int TIER_LEVEL_INTERVAL = 50;
-    /** Progress a tool gains from breaking an ore block (any other block gives 1). */
+    /** Base progress a tool gains from breaking an ore block (any other block gives 1). */
     public static final int ORE_USES = 10;
-    /** Progress a tool gains from killing a mob (on top of the 1 for the killing hit). */
-    public static final int KILL_USES = 10;
+    /** Base progress a tool gains from killing a mob (on top of the 1 for the killing hit). */
+    public static final int KILL_USES = 15;
+    /** Every this many player (XP) levels, ore breaks and kills give +1 extra progress. */
+    public static final int PLAYER_LEVELS_PER_BONUS = 200;
 
     private static final ResourceLocation DAMAGE_ID =
             ResourceLocation.fromNamespaceAndPath(ArbCraft.MODID, "tool_level_damage");
@@ -129,6 +132,21 @@ public class ToolLevelHandler {
     /** How many mining tiers a tool of this level has gained. */
     public static int getBonusTiers(int level) {
         return level / TIER_LEVEL_INTERVAL;
+    }
+
+    /** Extra progress per ore/kill from the player's XP level. Never changes the base constants. */
+    private static int playerLevelBonus(ServerPlayer player) {
+        return player.experienceLevel / PLAYER_LEVELS_PER_BONUS;
+    }
+
+    /** Progress for breaking an ore block, including the player level bonus. */
+    public static int oreUses(ServerPlayer player) {
+        return ORE_USES + playerLevelBonus(player);
+    }
+
+    /** Progress for killing a mob, including the player level bonus. */
+    public static int killUses(ServerPlayer player) {
+        return KILL_USES + playerLevelBonus(player);
     }
 
     /** Counts one use of the stack. */
@@ -266,7 +284,7 @@ public class ToolLevelHandler {
 
     /**
      * Mining: non-sword tools get progress for every block they break (ore blocks count as
-     * ORE_USES). Multi-block tools (hammers, vein miners...) break their extra blocks through
+     * oreUses). Multi-block tools (hammers, vein miners...) break their extra blocks through
      * the normal break path, so this event fires once per block and each one adds progress.
      * Swords don't gain progress from breaking blocks, only from hitting.
      */
@@ -279,8 +297,10 @@ public class ToolLevelHandler {
         if (held.getItem() instanceof SwordItem) return;
         if (event.getState().getDestroySpeed(event.getLevel(), event.getPos()) <= 0) return;
 
-        int amount = event.getState().is(Tags.Blocks.ORES) ? ORE_USES : 1;
+        int amount = event.getState().is(Tags.Blocks.ORES) ? oreUses(player) : 1;
         addUses(player, held, amount);
+
+        player.sendSystemMessage(Component.literal("Amount: " + amount));
     }
 
     /** Combat: every melee hit that deals damage counts as one use. */
@@ -295,7 +315,7 @@ public class ToolLevelHandler {
         addUse(player, player.getMainHandItem());
     }
 
-    /** Kills: a melee kill of a mob gives KILL_USES progress to the held tool. */
+    /** Kills: a melee kill of a mob gives killUses progress to the held tool. */
     @SubscribeEvent
     public static void onKill(LivingDeathEvent event) {
         if (!(event.getEntity() instanceof Mob)) return;
@@ -305,7 +325,7 @@ public class ToolLevelHandler {
         if (source.getDirectEntity() != player) return; // melee only, not arrows etc.
         if (player instanceof FakePlayer || player.isCreative()) return;
 
-        addUses(player, player.getMainHandItem(), KILL_USES);
+        addUses(player, player.getMainHandItem(), killUses(player));
     }
 
     /** Right-click actions: stripping logs (axe), tilling (hoe), flattening paths (shovel). */

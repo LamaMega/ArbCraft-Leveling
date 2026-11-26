@@ -13,7 +13,7 @@ public class HealthBonusLevelHandler {
     // ResourceLocation for the attack speed modifier - replace "yourmodid" with your actual mod ID
     private static final ResourceLocation HEALTH_BONUS_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("arbcraft", "level_health_bonus");
 
-    public static double healthModifier = 0.025; //0.07 to 0.05
+    public static double healthModifier = 0.012; //0.07 to 0.05
 
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
@@ -59,7 +59,7 @@ public class HealthBonusLevelHandler {
         // Example formulas - adjust these to your preference:
 
         // Linear scaling: 0.1 attack speed per level
-        return Math.min(level * healthModifier, 100000.0); //level * 0.001; 0.0334
+        return Math.min(level * healthModifier, 980.0); //level * 0.001; 0.0334
 
         // Logarithmic scaling (slower growth at higher levels):
         // return Math.log(level + 1) * 0.5;

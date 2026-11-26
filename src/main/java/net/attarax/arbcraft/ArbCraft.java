@@ -366,10 +366,10 @@ static boolean effectEnabled = true;
                 normalExp += 1 + (player.experienceLevel / 75);
             }
 
-            else if(player.experienceLevel >= 50)
+            else if(player.experienceLevel >= 20)
             {
 
-                oreExp = player.experienceLevel / 15;
+                oreExp = player.experienceLevel / 10;
                 bonusExp = player.experienceLevel / 30;
             }
 
@@ -429,7 +429,8 @@ static boolean effectEnabled = true;
         String blockName = block.getDescriptionId().toLowerCase();
         return blockName.contains("amethyst_block") || blockName.contains("prismarine")
                 || blockName.contains("obsidian") ||  blockName.contains("gilded_blackstone")
-                || blockName.contains("glowstone") || blockName.contains("magma_block");
+                || blockName.contains("glowstone") || blockName.contains("magma_block")
+                || blockName.contains("crying_obsidian") || blockName.contains("calcite");
     }
 
     //AUTO PICK UP
