@@ -1,0 +1,49 @@
+V2
+{
+    Do we keep the current Minecraft Experience Leveling, or Custom Leveling and EXP System?
+
+    Minecraft Leveling System:
+    {
+        ~
+    }
+
+    Custon Leveling System
+    {
+        [MINING]
+        How do players get EXP?
+        What if miners get punished in negative Y levels if they dont have specific perks?
+        
+
+
+    }
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
