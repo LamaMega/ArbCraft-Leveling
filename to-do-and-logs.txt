@@ -12,7 +12,9 @@ V2
         [MINING]
         How do players get EXP?
         What if miners get punished in negative Y levels if they dont have specific perks?
-        
+
+        [SKILLS]
+        L 1000 Unlock Fortune 4
 
 
     }
