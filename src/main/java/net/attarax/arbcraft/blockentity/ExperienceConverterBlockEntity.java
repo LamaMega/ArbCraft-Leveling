@@ -25,6 +25,9 @@ public class ExperienceConverterBlockEntity extends BlockEntity implements MenuP
     /** Max items the input slot can hold (vanilla would be 64). Change to whatever you want. */
     public static final int INPUT_SLOT_LIMIT = 2147483646;
 
+    /** The most XP the block can store. Conversion pauses while it is full. */
+    public static final int MAX_STORED_EXPERIENCE = 2147483646;
+
     private final ItemStackHandler inventory = new ItemStackHandler(1) {
         @Override
         protected void onContentsChanged(int slot) {
@@ -156,6 +159,13 @@ public class ExperienceConverterBlockEntity extends BlockEntity implements MenuP
                 int baseXp     = ExperienceConverterConfig.getExperienceValue(stack.getItem());
                 int actualXp   = Math.round(baseXp * be.getExpMultiplier());
                 if (actualXp > 0) {
+                    // Full: keep the item and the finished timer, and convert as soon as there is room again.
+                    // The long cast does the addition in 64 bits so the check itself can't overflow.
+                    if ((long) be.storedExperience + actualXp > MAX_STORED_EXPERIENCE) {
+                        be.conversionProgress = be.getCurrentConversionTime();
+                        return;
+                    }
+
                     be.storedExperience += actualXp;
                     stack.shrink(1);
                     be.conversionProgress = 0;
@@ -170,7 +180,7 @@ public class ExperienceConverterBlockEntity extends BlockEntity implements MenuP
     // ── XP transfer helpers ───────────────────────────────────────────────────
 
     public void addStoredExperience(int amount) {
-        storedExperience += amount;
+        storedExperience = (int) Math.min(MAX_STORED_EXPERIENCE, (long) storedExperience + amount);
         setChanged();
     }
 
